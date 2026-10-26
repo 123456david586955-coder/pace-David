@@ -1,8 +1,26 @@
-const CACHE='campus-move-v7';
-// Resolve every asset against the service worker's own scope, so the app works at / and at a subpath such as /pace-site/.
-const SCOPE=self.registration.scope;
-const ASSETS=['./','index.html','style.css','document.css','classroom.css','core.js','app.js','cloud-upload.js','mode.js','tiles.js','review.html','review.js','handout.html','guide.html','icon.svg','manifest.webmanifest','vendor/leaflet.js','vendor/leaflet.css'];
-const ASSET_URLS=new Set(ASSETS.map(p=>new URL(p,SCOPE).href));
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll([...ASSET_URLS]))));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('campus-move-')&&k!==CACHE).map(k=>caches.delete(k))))));
-self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==self.location.origin||!ASSET_URLS.has(u.origin+u.pathname))return;e.respondWith(fetch(e.request).then(r=>{if(r.ok&&!r.redirected){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));}return r;}).catch(()=>caches.match(e.request)));});
+﻿const DESTINATION = 'https://pace-david-run-20261026.web.app/training/';
+const SCOPE = self.registration.scope;
+
+// Replace the legacy GitHub Pages app immediately, including installed PWAs
+// that still have the previous version controlling their page.
+self.addEventListener('install', event => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('campus-move-')).map(key => caches.delete(key)));
+    await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(windows.filter(client => client.url.startsWith(SCOPE)).map(client => client.navigate(SCOPE)));
+  })());
+});
+
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (event.request.mode === 'navigate' && url.href.startsWith(SCOPE)) {
+    event.respondWith(Response.redirect(DESTINATION, 302));
+  }
+});
